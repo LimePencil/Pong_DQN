@@ -2,6 +2,8 @@ import collections
 import os
 import gym
 import torch
+from gym.wrappers import FrameStack, AtariPreprocessing
+
 from ReplayBuffer import ReplayBuffer
 import numpy as np
 import torch.optim as optim
@@ -11,9 +13,6 @@ import torch.nn.functional as F
 from DQN import DQN
 from torch.utils.tensorboard import SummaryWriter
 from PIL import Image
-from gym.wrappers import AtariPreprocessing
-from gym.wrappers import FrameStack
-
 
 # TODO: atatri preprocessing is broken use other method
 class Agent:
@@ -25,8 +24,8 @@ class Agent:
             dev = "cpu"
         self.device = torch.device(dev)
         self.env = gym.make('PongNoFrameskip-v4')
-        self.env = AtariPreprocessing(env=self.env,frame_skip=4,scale_obs=True)
-        self.env = FrameStack(env=self.env,num_stack=4)
+        self.env = AtariPreprocessing(self.env, frame_skip=4, grayscale_obs=True,scale_obs=True,grayscale_newaxis=False)
+        self.env = FrameStack(self.env,num_stack=4)
 
         # tensorboard integration and summary writing
         self.writer = SummaryWriter('runs/atari_pong_dqn_1')
@@ -45,7 +44,7 @@ class Agent:
         # variables for learning
         self.number_of_actions = self.env.action_space.n
         self.learning_rate = 0.00025
-        self.number_of_episode = 100
+        self.number_of_episode = 1000
         self.target_update_step = 10
         self.gamma = 0.99
         self.total_step = 0
@@ -53,7 +52,7 @@ class Agent:
 
         # replay memory variables
         self.Transition = collections.namedtuple('Transition', ('state', 'action', 'reward', 'next_state'))
-        self.replay_start_size = 5000
+        self.replay_start_size = 1000
         self.batch_size = 32
         buffer_size_limit = 20000  # need to be set so that it does not go over the memory limit
 
@@ -85,9 +84,10 @@ class Agent:
         while self.epi < self.number_of_episode:
             # get state when reset
             state = self.env.reset()
-            state = self.np_to_tensor(state)
+            state = self.np_to_tensor_with_preprocessing(state)
             cumulative_reward = 0
             step = 0
+            total_loss = 0
             while True:
                 self.env.render()
                 action = self.get_action(state)
@@ -95,7 +95,7 @@ class Agent:
 
                 cumulative_reward += reward
                 # self.to_image(next_state)
-                next_state = self.np_to_tensor(next_state)
+                next_state = self.np_to_tensor_with_preprocessing(next_state)
 
                 # push to replay memory
                 self.memory.push(state, action, torch.tensor([reward]).to(self.device), next_state)
@@ -108,19 +108,21 @@ class Agent:
                     self.writer.add_scalar("Rewards", cumulative_reward, self.total_step)
                     self.writer.add_scalar("Episode Length", step, self.total_step)
                     self.writer.add_scalar("Epsilon", self.epsilon, self.total_step)
+                    self.writer.add_scalar("Loss", total_loss, self.total_step)
                     self.writer.flush()
                     break
 
                 # learning if possible
                 if len(self.memory.buffer) > self.replay_start_size:
-                    self.loss = self.learn()
+                    total_loss += self.learn()
 
                     # updates target network every few steps
                     if step % self.target_update_step == 0:
-                        self.writer.add_scalar("Loss", self.loss, self.total_step)
+
                         self.q_target_net.load_state_dict(
                             self.q_net.state_dict())
-
+                self.print_summary()
+                self.save_interval()
                 step += 1
                 self.total_step += 1
                 del state
@@ -187,7 +189,8 @@ class Agent:
             im.show()
 
     # numpy array to tensor
-    def np_to_tensor(self, state):
+    def np_to_tensor_with_preprocessing(self, state):
+
         changed = np.expand_dims(state, axis=0)
         return torch.from_numpy(changed).to(self.device)
 
@@ -212,3 +215,4 @@ class Agent:
 if __name__ == "__main__":
     a = Agent()
     a.main()
+
