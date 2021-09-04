@@ -122,7 +122,7 @@ class Agent:
                         self.q_target_net.load_state_dict(
                             self.q_net.state_dict())
                 self.print_summary()
-                self.save_interval()
+                self.checkpoint_save()
                 step += 1
                 self.total_step += 1
                 del state
