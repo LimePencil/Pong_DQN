@@ -28,7 +28,7 @@ class Agent:
         self.env = FrameStack(self.env,num_stack=4)
 
         # tensorboard integration and summary writing
-        self.writer = SummaryWriter('runs/atari_pong_dqn_1')
+        self.writer = SummaryWriter('runs/atari_pong_dqn_1_continue')
         self.print_interval = 5
 
         # list for printing summary to terminal
@@ -38,13 +38,13 @@ class Agent:
         # epsilon values
         self.initial_epsilon = 1.0
         self.final_epsilon = 0.1
-        self.epsilon = self.initial_epsilon
+        self.epsilon = self.final_epsilon
         self.epsilon_max_frame = 1000000
 
         # variables for learning
         self.number_of_actions = self.env.action_space.n
         self.learning_rate = 0.00025
-        self.number_of_episode = 1000
+        self.number_of_episode = 5000
         self.target_update_step = 10
         self.gamma = 0.99
         self.total_step = 0
@@ -57,7 +57,7 @@ class Agent:
         buffer_size_limit = 20000  # need to be set so that it does not go over the memory limit
 
         # save variables
-        self.load = False
+        self.load = True
         self.path_to_save_file = "model/pretrained_model.pth"
         self.save_interval = 10
 
@@ -121,14 +121,14 @@ class Agent:
 
                         self.q_target_net.load_state_dict(
                             self.q_net.state_dict())
-                self.print_summary()
-                self.checkpoint_save()
                 step += 1
                 self.total_step += 1
                 del state
                 state = next_state
                 del next_state
-
+            self.print_summary()
+            self.checkpoint_save()
+            self.epi+=1
         # saving model in the end
         torch.save(self.q_net, 'model/dqn_model_final.pth')
         self.env.close()
@@ -204,7 +204,7 @@ class Agent:
 
     # printing summary in the terminal
     def print_summary(self):
-        if self.epi % self.print_interval == 0 and self.epi != 0:
+        if self.epi % self.print_interval == 0:
             print("episode: {} / step: {:.2f} / reward: {:.3f}".format(self.epi, np.mean(self.epi_length),
                                                                        np.mean(self.rewards)))
             self.epi_length = []
